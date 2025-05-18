@@ -3,14 +3,15 @@ name: Track Goal Progress
 on:
   schedule:
     - cron: "0 */5 * * *" # Every 5 hours
-  workflow_dispatch: {} # Manual trigger
+  workflow_dispatch:
   issues:
-    types: [opened] # Trigger when an issue is opened
+    types: [opened]
 
 jobs:
   scrape:
     if: github.event_name != 'issues' || github.event.issue.title == 'update'
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -23,33 +24,15 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm init -y && npm install playwright
+        run: |
+          npm init -y
+          npm install playwright
 
-      - name: Check for "update" issue
-        id: check-issue
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const issue = await github.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              per_page: 100
-            });
-            const updateIssue = issue.data.find(i => i.title === 'update');
-            return { exists: !!updateIssue };
-          result-encoding: string
-
-      - name: Skip if "update" issue not found
-        if: steps.check-issue.outputs.exists == 'false'
-        run: echo "No 'update' issue found. Skipping workflow."
-
-      - name: Run scraper if issue exists
-        if: steps.check-issue.outputs.exists == 'true'
+      - name: Run scraper
+        id: scrape
         run: node scrape.js
 
       - name: Commit goal progress
-        if: steps.check-issue.outputs.exists == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
@@ -58,15 +41,15 @@ jobs:
           git push
 
       - name: Send to Discord
-        if: steps.check-issue.outputs.exists == 'true'
         uses: discordactions/send-to-discord@v1
         with:
           message: |
             📊 **Current Status:**
-            - **Site Percentage:** ${{ steps.scrape.outputs.site_percent }}%
+            - **Site Percentage:** ${{ steps.scrape.outputs.percentage }}%
             - **Balance:** ${{ steps.scrape.outputs.balance }}
-            - **Goal Progress:** ${{ steps.scrape.outputs.goal_progress }}%
+            - **Goal Progress:** ${{ steps.scrape.outputs.percentage }}%
+            - **Time Remaining:** ${{ steps.scrape.outputs.time_remaining }}
 
             🛒 **Affordable Items:**
-            ${{ urldecode(steps.scrape.outputs.affordable_items) | jq -r 'map("- "+.name+" ($"+.cost+")") | join("\\n")' }}
+            ${{ steps.scrape.outputs.formatted_items }}
           webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
