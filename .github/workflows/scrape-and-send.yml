@@ -2,54 +2,54 @@ name: Track Goal Progress
 
 on:
   schedule:
-    - cron: "0 */5 * * *" # Every 5 hours
+    - cron: "0 * * * *"
   workflow_dispatch:
-  issues:
-    types: [opened]
 
 jobs:
   scrape:
-    if: github.event_name != 'issues' || github.event.issue.title == 'update'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          ref: main
+      - name: Checkout
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install dependencies
-        run: |
-          npm init -y
-          npm install playwright
+        run: npm install playwright
 
       - name: Run scraper
         id: scrape
         run: node scrape.js
 
-      - name: Commit goal progress
+      - name: Decode affordable items
+        id: decode_items
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add goal_progress.json
-          git commit -m "Update goal progress"
-          git push
+          echo "formatted_items<<EOF" >> $GITHUB_OUTPUT
+          echo "$(echo '${{ steps.scrape.outputs.affordable_items }}' | jq -r 'map("- \(.name) ($\(.cost))") | join("\n")')" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Send to Discord
-        uses: discordactions/send-to-discord@v1
+      - name: Upload screenshot
+        uses: actions/upload-artifact@v4
         with:
-          message: |
-            📊 **Current Status:**
-            - **Site Percentage:** ${{ steps.scrape.outputs.percentage }}%
-            - **Balance:** ${{ steps.scrape.outputs.balance }}
-            - **Goal Progress:** ${{ steps.scrape.outputs.percentage }}%
-            - **Time Remaining:** ${{ steps.scrape.outputs.time_remaining }}
+          name: milestone-screenshot
+          path: milestone.png
 
-            🛒 **Affordable Items:**
-            ${{ steps.scrape.outputs.formatted_items }}
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      - name: Send screenshot to Discord
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: |
+            📊 Site goal progress is now at **${{ steps.scrape.outputs.site_percent }}%**
+            ${{ steps.decode_items.outputs.formatted_items }}
+
+            ![Milestone Progress](attachment://milestone.png)
+
+      - name: Upload milestone image for webhook (needed for Discord image URL access)
+        run: |
+          mkdir -p discord
+          cp milestone.png discord/
+        continue-on-error: true
