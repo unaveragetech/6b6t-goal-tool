@@ -4,9 +4,12 @@ on:
   schedule:
     - cron: "0 */5 * * *" # Every 5 hours
   workflow_dispatch: {} # Manual trigger
+  issues:
+    types: [opened] # Trigger when an issue is opened
 
 jobs:
   scrape:
+    if: github.event_name != 'issues' || github.event.issue.title == 'update'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
