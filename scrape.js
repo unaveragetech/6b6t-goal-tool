@@ -8,22 +8,20 @@ const fs = require('fs');
   try {
     await page.goto('https://www.6b6t.org/en/shop', { waitUntil: 'networkidle' });
 
-    // Wait for essential elements to load (adjust selectors as needed)
-    await page.waitForSelector('.percentage-selector', { timeout: 5000 });
-
-    const percentageText = await page.locator('.percentage-selector').textContent();
-    const balanceText = await page.locator('.balance-selector').textContent();
-    const timeText = await page.locator('.time-remaining-selector').textContent();
-
+    // Wait for and extract the percentage from the milestone widget
+    await page.waitForSelector('.progress-bar .progress-text', { timeout: 5000 });
+    const percentageText = await page.locator('.progress-bar .progress-text').textContent();
     const percentage = parseFloat(percentageText?.replace(/[^\d.]/g, '') || '0');
-    const balance = parseFloat(balanceText?.replace(/[^0-9.-]+/g, '') || '0');
-    const timeRemaining = timeText?.trim() || 'Unknown';
+
+    // Optional: these might need valid selectors if you plan to extract balance or time
+    const balance = 0; // Placeholder: replace with actual logic if applicable
+    const timeRemaining = 'Unknown'; // Placeholder: replace with actual logic if needed
 
     console.log(`Percentage: ${percentage}%`);
     console.log(`Balance: $${balance}`);
     console.log(`Time Remaining: ${timeRemaining}`);
 
-    // Read item costs
+    // Load item costs
     const itemCosts = JSON.parse(fs.readFileSync('item_costs.json', 'utf-8'));
 
     const affordableItems = itemCosts.items
@@ -48,10 +46,8 @@ ${affordableItems.map(i => `- ${i.name}: $${i.cost}`).join('\n')}
 
     console.log(resultText);
 
-    // Log to file
     fs.appendFileSync('scrape_log.txt', `${new Date().toISOString()}\n${resultText}\n\n`);
 
-    // Write to a JSON file for GitHub Action
     fs.writeFileSync('goal_progress.json', JSON.stringify({
       percentage,
       balance,
@@ -59,7 +55,6 @@ ${affordableItems.map(i => `- ${i.name}: $${i.cost}`).join('\n')}
       affordableItems
     }, null, 2));
 
-    // Set GitHub Action outputs using environment file (recommended way)
     const outputFile = process.env.GITHUB_OUTPUT;
     if (outputFile) {
       fs.appendFileSync(outputFile, `site_percent=${percentage}\n`);
