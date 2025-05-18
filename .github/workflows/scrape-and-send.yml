@@ -1,0 +1,42 @@
+name: Scrape Page, Analyze & Send to Discord
+
+on:
+  schedule:
+    - cron: "0 * * * *" # Runs every hour
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm init -y && npm install playwright
+
+      - name: Run scraper
+        id: scrape
+        run: node scrape.js
+
+      - name: Send to Discord
+        uses: discordactions/send-to-discord@v1
+        with:
+          message: |
+            📊 **Current Status:**
+            
+            - **Percentage:** ${{ steps.scrape.outputs.percentage }}%
+            - **Balance:** ${{ steps.scrape.outputs.balance }}
+            - **Time Remaining:** ${{ steps.scrape.outputs.time_remaining }}
+
+            🛒 **Affordable Items:**
+            ${{ urldecode(steps.scrape.outputs.affordable_items) | jq -r 'map("- "+.name+" ($"+.cost+")") | join("\\n")' }}
+
+            🧮 Total Affordable Items Cost: ${{ ... }}
+            ✅ Goal Completion Possible: {{ if totalAffordable > balance then "Yes" else "No" }}
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
